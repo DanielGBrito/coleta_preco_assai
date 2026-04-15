@@ -1,0 +1,21 @@
+# Arquivos temporários/gerados
+node_modules/
+*.json
+*.csv
+
+# Pastas antigas
+antigo/
+
+# Logs do sistema
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
