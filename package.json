@@ -1,0 +1,16 @@
+{
+  "name": "assai-ifood-automation",
+  "version": "1.0.0",
+  "description": "Automação de extração de produtos do iFood (Assaí)",
+  "main": "teste_final.js",
+  "scripts": {
+    "start": "node teste_final.js",
+    "dev": "node teste_final.js"
+  },
+  "keywords": ["ifood", "automation", "scraping", "playwright"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}
