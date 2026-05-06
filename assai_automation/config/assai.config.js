@@ -10,6 +10,9 @@ const redisPassword = process.env.REDIS_PASSWORD || process.env.REDIS_PWD || '';
 const redisDb = Number(process.env.REDIS_DB || 0);
 
 const outputDir = path.resolve(__dirname, '../output');
+const headersFilePath = process.env.IFOOD_HEADERS_FILE
+  ? path.resolve(process.env.IFOOD_HEADERS_FILE)
+  : path.join(outputDir, 'headers_produtos.json');
 
 function encodePath(value) {
   return encodeURIComponent(value);
@@ -24,6 +27,10 @@ module.exports = {
   request: {
     timeoutMs: Number(process.env.REQUEST_TIMEOUT_MS || 5000),
     intervalMs: Number(process.env.REQUEST_INTERVAL_MS || 5000),
+  },
+  input: {
+    headersFilePath,
+    cookieOverride: process.env.IFOOD_COOKIE || '',
   },
   browser: {
     headless: String(process.env.HEADLESS || 'false').toLowerCase() === 'true',

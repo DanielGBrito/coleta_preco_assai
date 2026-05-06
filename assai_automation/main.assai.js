@@ -4,8 +4,7 @@ const path = require('path');
 require('./config/env.config');
 const config = require('./config/assai.config');
 
-const { captureSession } = require('./lib/sessionCapture.lib');
-const { buildProductHeaders } = require('./lib/headers.lib');
+const { loadProductHeaders } = require('./lib/headers.lib');
 const { getJson, resetSslSessionState } = require('./lib/httpClient.lib');
 const { extractCatalogs, mapCatalogItemsToRows } = require('./lib/catalog.lib');
 const { writeCsv } = require('./lib/csv.lib');
@@ -25,14 +24,9 @@ async function run() {
   ensureOutputStructure();
 
   console.log('=== ASSAI AUTOMATION ===');
-  console.log('Capturando sessao e headers via browser...');
+  console.log('Carregando headers de arquivo (modo API-only)...');
 
-  const capturedSession = await captureSession(config);
-  const headersProdutos = buildProductHeaders(
-    capturedSession.headers,
-    capturedSession.cookieHeader,
-    config.urls.storeUrl
-  );
+  const headersProdutos = loadProductHeaders(config);
 
   fs.writeFileSync(config.output.headersProductsPath, JSON.stringify(headersProdutos, null, 2), 'utf-8');
 

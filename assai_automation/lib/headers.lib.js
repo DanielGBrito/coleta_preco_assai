@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 function getHeader(obj, key) {
   const source = obj || {};
   const keys = Object.keys(source);
@@ -33,7 +35,37 @@ function buildProductHeaders(capturedHeaders, cookieHeader, referrer) {
   );
 }
 
+function sanitizeHeaders(headers) {
+  return Object.fromEntries(
+    Object.entries(headers || {}).filter(([key, value]) => !key.startsWith(':') && value !== undefined && value !== null && value !== '')
+  );
+}
+
+function loadProductHeaders(config) {
+  const filePath = config.input.headersFilePath;
+
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Arquivo de headers nao encontrado: ${filePath}. Defina IFOOD_HEADERS_FILE com um JSON valido.`);
+  }
+
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  const parsed = JSON.parse(raw);
+
+  let headers = parsed;
+  if (parsed && typeof parsed === 'object' && parsed.headers) {
+    const cookieHeader = config.input.cookieOverride || parsed.cookieHeader || getHeader(parsed.headers, 'cookie') || '';
+    headers = buildProductHeaders(parsed.headers, cookieHeader, config.urls.storeUrl);
+  }
+
+  if (config.input.cookieOverride) {
+    headers.Cookie = config.input.cookieOverride;
+  }
+
+  return sanitizeHeaders(headers);
+}
+
 module.exports = {
   getHeader,
   buildProductHeaders,
+  loadProductHeaders,
 };

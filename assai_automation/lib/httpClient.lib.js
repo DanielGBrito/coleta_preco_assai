@@ -1,4 +1,5 @@
 const https = require('https');
+const zlib = require('zlib');
 const {
   createTlsAgentFromEnv,
   isSslCertificateError,
@@ -8,6 +9,29 @@ const {
 let forceInsecureForSession = ['1', 'true', 'yes'].includes(
   String(process.env.IFOOD_INSECURE_SSL || '').toLowerCase()
 );
+
+function decodeBody(buffer, contentEncoding) {
+  const rawEncoding = Array.isArray(contentEncoding) ? contentEncoding[0] : contentEncoding;
+  const encoding = String(rawEncoding || '').toLowerCase().split(',')[0].trim();
+
+  if (!encoding || encoding === 'identity') {
+    return buffer;
+  }
+
+  if (encoding === 'gzip' || encoding === 'x-gzip') {
+    return zlib.gunzipSync(buffer);
+  }
+
+  if (encoding === 'deflate') {
+    return zlib.inflateSync(buffer);
+  }
+
+  if (encoding === 'br') {
+    return zlib.brotliDecompressSync(buffer);
+  }
+
+  return buffer;
+}
 
 function requestText(url, headers, agent, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -24,10 +48,21 @@ function requestText(url, headers, agent, timeoutMs) {
 
         res.on('data', (chunk) => chunks.push(chunk));
         res.on('end', () => {
+          const compressedBody = Buffer.concat(chunks);
+
+          let decodedBody;
+          try {
+            decodedBody = decodeBody(compressedBody, res.headers['content-encoding']);
+          } catch (err) {
+            reject(new Error(`Falha ao descompactar resposta: ${err.message}`));
+            return;
+          }
+
           resolve({
             status: res.statusCode || 0,
             statusText: res.statusMessage || '',
-            text: Buffer.concat(chunks).toString('utf-8'),
+            text: decodedBody.toString('utf-8'),
+            headers: res.headers,
           });
         });
       }
