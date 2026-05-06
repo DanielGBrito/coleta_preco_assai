@@ -9,6 +9,14 @@ const redisPort = Number(process.env.REDIS_PORT || 6379);
 const redisPassword = process.env.REDIS_PASSWORD || process.env.REDIS_PWD || '';
 const redisDb = Number(process.env.REDIS_DB || 0);
 
+function isTruthy(value, defaultValue = false) {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+
+  return ['1', 'true', 'yes'].includes(String(value).toLowerCase());
+}
+
 const outputDir = path.resolve(__dirname, '../output');
 const headersFilePath = process.env.IFOOD_HEADERS_FILE
   ? path.resolve(process.env.IFOOD_HEADERS_FILE)
@@ -20,6 +28,12 @@ function encodePath(value) {
 
 module.exports = {
   merchantId,
+  collection: {
+    tipo: process.env.COLETA_TIPO || 'Atacado',
+    cep: process.env.COLETA_CEP || '',
+    cidade: process.env.COLETA_CIDADE || '',
+    bairro: process.env.COLETA_BAIRRO || '',
+  },
   sizes: {
     categoryItemsSize,
     catalogItemsSize,
@@ -31,6 +45,37 @@ module.exports = {
   input: {
     headersFilePath,
     cookieOverride: process.env.IFOOD_COOKIE || '',
+  },
+  consinco: {
+    enabled: isTruthy(process.env.CONSINCO_ENABLED, false),
+    apiHost: process.env.CONSINCO_API || '',
+    apiPort: Number(process.env.CONSINCO_API_PORT || 443),
+    company: process.env.CONSINCO_COMPANY || '',
+    username: process.env.CONSINCO_USER || '',
+    password: process.env.CONSINCO_PWD || '',
+    seqConcorrente: process.env.CONSINCO_SEQ_CONCORRENTE || '',
+    seqLista: process.env.CONSINCO_SEQ_LISTA || '',
+    dataPesquisa: process.env.CONSINCO_DATA_PESQUISA || '',
+    empresasJson: process.env.CONSINCO_EMPRESAS_JSON || '[]',
+    timeoutMs: Number(process.env.CONSINCO_TIMEOUT_MS || 180000),
+  },
+  database: {
+    enabled: isTruthy(process.env.DB_ENABLED, false),
+    dwUrl: process.env.DW_URL_DB || '',
+    dwUser: process.env.DW_USER_DB || '',
+    dwPassword: process.env.DW_PWD_DB || '',
+    connectTimeoutMs: Number(process.env.DB_CONNECT_TIMEOUT_MS || 60000),
+  },
+  email: {
+    enabled: isTruthy(process.env.EMAIL_ENABLED, false),
+    host: process.env.SMTP_HOST || '',
+    port: Number(process.env.SMTP_PORT || 465),
+    secure: isTruthy(process.env.SMTP_SECURE, true),
+    user: process.env.SMTP_USER || '',
+    password: process.env.SMTP_PWD || '',
+    destinos: process.env.SMTP_DESTINOS || '',
+    assuntoPrefixo: process.env.EMAIL_ASSUNTO_PREFIXO || 'Produtos coletados do concorrente Assai',
+    attachmentPrefix: process.env.EMAIL_ANEXO_PREFIX || 'coletaTotalAssai',
   },
   browser: {
     headless: String(process.env.HEADLESS || 'false').toLowerCase() === 'true',

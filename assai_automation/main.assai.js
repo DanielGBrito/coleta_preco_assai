@@ -11,8 +11,16 @@ const { writeCsv } = require('./lib/csv.lib');
 const { sleep } = require('./lib/wait.lib');
 
 const { CatalogRedisQueue } = require('./queue/redis.queue');
-const { persistDbImportPayload } = require('./integrations/database.integration');
-const { persistConsincoPayload } = require('./integrations/consinco.integration');
+const { persistDbImportPayload, integrateDatabase } = require('./integrations/database.integration');
+const { persistConsincoPayload, integrateConsinco } = require('./integrations/consinco.integration');
+const { sendResultEmail } = require('./integrations/email.integration');
+
+function formatDateDDMMYYYY(date) {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear());
+  return `${day}${month}${year}`;
+}
 
 function ensureOutputStructure() {
   fs.mkdirSync(config.output.baseDir, { recursive: true });
@@ -20,6 +28,9 @@ function ensureOutputStructure() {
 }
 
 async function run() {
+  const executionStartedAt = new Date();
+  const executionDateToken = formatDateDDMMYYYY(executionStartedAt);
+
   resetSslSessionState();
   ensureOutputStructure();
 
@@ -83,7 +94,9 @@ async function run() {
           'utf-8'
         );
 
-        const rows = mapCatalogItemsToRows(catalogResponse.json, job.name, config);
+        const rows = mapCatalogItemsToRows(catalogResponse.json, job.name, config, {
+          collectedAtIso: executionStartedAt.toISOString(),
+        });
         allRows.push(...rows);
       } catch (err) {
         console.error(`Falha no catalogo ${job.code}: ${err.message}`);
@@ -97,9 +110,75 @@ async function run() {
 
     fs.writeFileSync(config.output.responseAggregatePath, JSON.stringify(allCatalogResponses, null, 2), 'utf-8');
 
-    writeCsv(allRows, config.output.csvPath);
+    await writeCsv(allRows, config.output.csvPath);
     await persistDbImportPayload(allRows, config.output.dbPayloadPath);
     await persistConsincoPayload(allRows, config.output.consincoPayloadPath);
+
+    let databaseResult;
+    try {
+      databaseResult = await integrateDatabase(config.database, allRows, {
+        merchantId: config.merchantId,
+        seqConcorrente: config.consinco.seqConcorrente,
+        seqLista: config.consinco.seqLista,
+      });
+
+      if (databaseResult.skipped) {
+        console.log(`[DB] Persistencia ignorada: ${databaseResult.reason}`);
+      } else {
+        console.log(`[DB] Persistencia concluida. Linhas inseridas: ${databaseResult.rowsInserted}`);
+      }
+    } catch (err) {
+      databaseResult = {
+        enabled: config.database.enabled,
+        skipped: false,
+        success: false,
+        error: err.message,
+      };
+      console.error(`[DB] Erro na persistencia: ${err.message}`);
+    }
+
+    let consincoResult;
+    try {
+      consincoResult = await integrateConsinco(config.consinco, allRows);
+      if (consincoResult.skipped) {
+        console.log(`[CONSINCO] Integracao ignorada: ${consincoResult.reason}`);
+      } else {
+        console.log('[CONSINCO] Integracao concluida com sucesso.');
+      }
+    } catch (err) {
+      consincoResult = {
+        enabled: config.consinco.enabled,
+        skipped: false,
+        success: false,
+        error: err.message,
+      };
+      console.error(`[CONSINCO] Erro na integracao: ${err.message}`);
+    }
+
+    let emailResult;
+    try {
+      emailResult = await sendResultEmail(config.email, {
+        csvPath: config.output.csvPath,
+        totalRows: allRows.length,
+        failuresCount: failures.length,
+        executionDate: executionStartedAt,
+        attachmentFilename: `${config.email.attachmentPrefix}${executionDateToken}.csv`,
+      });
+
+      if (emailResult.skipped) {
+        console.log(`[EMAIL] Envio ignorado: ${emailResult.reason}`);
+      } else {
+        console.log('[EMAIL] E-mail enviado com sucesso.');
+      }
+    } catch (err) {
+      emailResult = {
+        enabled: config.email.enabled,
+        skipped: false,
+        success: false,
+        error: err.message,
+      };
+      console.error(`[EMAIL] Erro no envio: ${err.message}`);
+    }
 
     const report = {
       generatedAt: new Date().toISOString(),
@@ -107,6 +186,11 @@ async function run() {
       totalCatalogs: catalogs.length,
       totalRows: allRows.length,
       failures,
+      integrations: {
+        database: databaseResult,
+        consinco: consincoResult,
+        email: emailResult,
+      },
       requestTimeoutMs: config.request.timeoutMs,
       requestIntervalMs: config.request.intervalMs,
       output: config.output,

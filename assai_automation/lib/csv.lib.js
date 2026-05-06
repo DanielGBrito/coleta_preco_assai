@@ -1,5 +1,9 @@
 const fs = require('fs');
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function escapeCsv(value) {
   if (value === null || value === undefined) return '';
 
@@ -21,9 +25,31 @@ function escapeCsv(value) {
   return text;
 }
 
-function writeCsv(rows, filePath) {
+async function writeWithRetry(filePath, content, retries = 5, waitMs = 1000) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      await fs.promises.writeFile(filePath, content, 'utf-8');
+      return;
+    } catch (err) {
+      const lockError = err && (err.code === 'EBUSY' || err.code === 'EPERM');
+      lastError = err;
+
+      if (!lockError || attempt === retries) {
+        throw err;
+      }
+
+      await sleep(waitMs);
+    }
+  }
+
+  throw lastError;
+}
+
+async function writeCsv(rows, filePath) {
   if (!Array.isArray(rows) || rows.length === 0) {
-    fs.writeFileSync(filePath, '', 'utf-8');
+    await writeWithRetry(filePath, '');
     return;
   }
 
@@ -35,7 +61,7 @@ function writeCsv(rows, filePath) {
     csvRows.push(line.join(','));
   }
 
-  fs.writeFileSync(filePath, csvRows.join('\n'), 'utf-8');
+  await writeWithRetry(filePath, csvRows.join('\n'));
 }
 
 module.exports = {
