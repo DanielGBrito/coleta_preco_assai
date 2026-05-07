@@ -1,5 +1,7 @@
 const fs = require('fs');
 
+const UTF8_BOM = '\uFEFF';
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -49,7 +51,7 @@ async function writeWithRetry(filePath, content, retries = 5, waitMs = 1000) {
 
 async function writeCsv(rows, filePath) {
   if (!Array.isArray(rows) || rows.length === 0) {
-    await writeWithRetry(filePath, '');
+    await writeWithRetry(filePath, UTF8_BOM);
     return;
   }
 
@@ -61,7 +63,8 @@ async function writeCsv(rows, filePath) {
     csvRows.push(line.join(','));
   }
 
-  await writeWithRetry(filePath, csvRows.join('\n'));
+  // Excel on Windows reliably detects UTF-8 when BOM is present.
+  await writeWithRetry(filePath, `${UTF8_BOM}${csvRows.join('\r\n')}`);
 }
 
 module.exports = {
